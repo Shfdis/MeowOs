@@ -1,6 +1,6 @@
 #include "kernel_init.h"
 #include "page_orchestrator.h"
-#include "types/types.h"
+#include "syscall_handler.h"
 #include "types/idt.h"
 #include "keyboard.h"
 
@@ -9,6 +9,7 @@ kernel_basic_info_t kernel_basic_info{};
 void* operator new(unsigned long, void* p) { return p; }
 
 static char orchestrator_storage[sizeof(PageOrchestrator)] __attribute__((aligned(alignof(PageOrchestrator))));
+
 
 void parse_multiboot(multiboot_info_t* multiboot_info) {
     uint32_t total = multiboot_info->header.total_size;
@@ -82,6 +83,7 @@ void kernel_init(int magic, multiboot_info_t* multiboot_info) {
     IDT::load();
     Keyboard::init();
     enable_interrupts();
+    initialize_syscalls();
     int cur_line = 0;
     int cur_column = 0;
     int white = 0xF0 << 8;

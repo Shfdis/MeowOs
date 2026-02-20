@@ -50,3 +50,8 @@ inline void disable_interrupts() {
 inline void halt() {
     asm volatile("hlt");
 }
+inline void wrmsr(uint32_t addr, uint64_t value) {
+    uint32_t low = value & 0xFFFFFFFF;
+    uint32_t high = value >> 32;
+    asm volatile("wrmsr" : : "c"(addr), "a"(low), "d"(high));
+}

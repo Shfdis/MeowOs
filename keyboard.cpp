@@ -1,6 +1,4 @@
 #include "keyboard.h"
-#include "kernel_init.h"
-
 bool Keyboard::shift_pressed = false;
 bool Keyboard::ctrl_pressed = false;
 bool Keyboard::caps_lock = false;
