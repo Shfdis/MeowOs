@@ -10,5 +10,6 @@ public:
     PageOrchestrator(void* bitmap_begin, uint64_t page_count);
     bool operator[](uint64_t page_number);
     void set_page(void* page);
+    void release_page(void* page);
     void* get_page();
 };

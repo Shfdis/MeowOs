@@ -13,7 +13,16 @@ section .bss
 
 align 16
     resb 8192              ; 8 KiB stack buffer
+global stack_top
 stack_top:                 ; ESP/RSP points here (stack grows downward)
+
+global tss
+align 4
+tss: resb 108              ; 64-bit TSS (RSP0 at offset 4)
+
+; Writable GDT copy so we can set TSS base without touching .rodata (multiboot header must stay early)
+gdt_copy:    resb 40       ; 5 descriptors
+gdt_ptr_copy: resb 10      ; limit (2) + base (4) for lgdt; 64-bit lgdt uses 2+8 but we only need 4-byte base
 
 align 4096                 ; Page tables must be 4 KiB-aligned (bits 11:0 == 0)
 pml4_table: resb 4096      ; Level 4 — root, loaded into CR3
@@ -36,7 +45,7 @@ pt_table13: resb 4096      ; Level 1 — covers virtual 0x1800000–0x19FFFFF
 pt_table14: resb 4096      ; Level 1 — covers virtual 0x1A00000–0x1BFFFFF
 pt_table15: resb 4096      ; Level 1 — covers virtual 0x1C00000–0x1DFFFFF
 pt_table16: resb 4096      ; Level 1 — covers virtual 0x1E00000–0x1FFFFFF 
-section .rodata
+section .multiboot
 align 8
 mb2_header:
     dd MB2_MAGIC            ; Magic number GRUB2 scans for
@@ -48,7 +57,8 @@ mb2_header:
     dd 8
 mb2_header_end:
 
-;  GDT 
+section .rodata
+;  GDT
 align 8
 gdt_ptr:
     dw gdt_end - gdt - 1   ; Limit
@@ -66,6 +76,14 @@ gdt:
     ;   Access 0x92 = Present | DPL=0 | S=1 | Type=0010 (read/write data)
     dw 0xFFFF, 0x0000
     db 0x00, 0x92, 0x00, 0x00
+    ; Descriptor 3 — 64-bit TSS (selector 0x18)
+    dw 0x006B            ; Limit 15:0 (108-1)
+    dw 0                 ; Base 15:0
+    db 0                 ; Base 23:16
+    db 0x89              ; Type = 64-bit TSS (available)
+    db 0x00              ; Limit 19:16, flags
+    db 0                 ; Base 31:24
+    dd 0                 ; Base 63:32
 gdt_end:
 align 4
 multiboot_magic:   resd 1
@@ -144,6 +162,32 @@ long_mode_entry:
     mov  fs, ax
     mov  gs, ax
     mov  ss, ax
+
+    ; Build writable GDT copy in .bss (cannot write .rodata; multiboot header must stay in first 32KB)
+    lea  rsi, [rel gdt]
+    lea  rdi, [rel gdt_copy]
+    mov  ecx, 5
+    rep  movsq                       ; copy 40 bytes
+    lea  rax, [rel tss]
+    lea  rdi, [rel gdt_copy]
+    mov  [rdi + 26], ax              ; TSS descriptor base 15:0
+    shr  rax, 16
+    mov  [rdi + 28], al              ; base 23:16
+    mov  [rdi + 31], ah              ; base 31:24
+    shr  rax, 32
+    mov  [rdi + 32], eax             ; base 63:32
+    lea  rax, [rel gdt_copy]
+    lea  rdi, [rel gdt_ptr_copy]
+    mov  word [rdi], 39              ; limit
+    mov  [rdi + 2], eax              ; base low 32 bits
+    xor  eax, eax
+    mov  [rdi + 6], eax              ; base high 32 bits (identity-mapped, so 0)
+    lgdt [rdi]                       ; load GDT from writable copy
+    lea  rax, [rel tss]
+    lea  rbx, [rel stack_top]
+    mov  [rax + 4], rbx              ; TSS.RSP0 = kernel stack top
+    mov  ax, 0x18
+    ltr  ax                          ; Load TSS selector
 
     extern kernel_init
     mov  eax, [multiboot_magic]

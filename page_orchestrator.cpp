@@ -30,3 +30,9 @@ void PageOrchestrator::set_page(void* page) {
     uint64_t page_number = (reinterpret_cast<uint64_t>(page) - reinterpret_cast<uint64_t>(kernel_basic_info.mem_begin)) / 4096;
     bitmap_begin[page_number / 64] |= 1ULL << (page_number % 64);
 }
+
+void PageOrchestrator::release_page(void* page) {
+    uint64_t page_number = (reinterpret_cast<uint64_t>(page) - reinterpret_cast<uint64_t>(kernel_basic_info.mem_begin)) / 4096;
+    if (page_number < page_count)
+        bitmap_begin[page_number / 64] &= ~(1ULL << (page_number % 64));
+}

@@ -2,13 +2,25 @@
 #include "page_orchestrator.h"
 #include "syscall_handler.h"
 #include "types/idt.h"
-#include "keyboard.h"
+#include "drivers/keyboard.h"
+#include "drivers/framebuffer.h"
+#include "timer.h"
+#include "scheduler.h"
+#include "fs/filesystem.h"
+#include "fs/fs_error.h"
+#include "heap.h"
+#include "process.h"
+
+extern "C" void process_restore_and_switch_to_ctx(cpu_context_t* to_ctx, uint64_t new_cr3);
 
 kernel_basic_info_t kernel_basic_info{};
 
-void* operator new(unsigned long, void* p) { return p; }
+fs::FileSystem* g_fs = nullptr;
 
-static char orchestrator_storage[sizeof(PageOrchestrator)] __attribute__((aligned(alignof(PageOrchestrator))));
+namespace {
+constexpr uint32_t MAX_INIT_SIZE = 256 * 1024;
+constexpr uint64_t HEAP_START_VIRT = 0x2000000;
+}
 
 
 void parse_multiboot(multiboot_info_t* multiboot_info) {
@@ -42,6 +54,7 @@ void parse_multiboot(multiboot_info_t* multiboot_info) {
 void kernel_init(int magic, multiboot_info_t* multiboot_info) {
     parse_multiboot(multiboot_info);
     kernel_basic_info.frame_buffer = reinterpret_cast<uint16_t(*)[80]>(0xB8000);
+    g_framebuffer.init();
 
     char* bitmap_start = reinterpret_cast<char*>(
         (reinterpret_cast<uint64_t>(_kernel_end) + 0xFFF) & ~0xFFFULL
@@ -68,50 +81,68 @@ void kernel_init(int magic, multiboot_info_t* multiboot_info) {
 
     kernel_basic_info.pml4_table = pml4_table;
 
-    kernel_basic_info.page_orchestrator = new (orchestrator_storage) PageOrchestrator(
+    constexpr uint64_t identity_mapped_end = 32ULL * 1024 * 1024;
+    char* heap_start = bitmap_start + PAGE_BITMAP_SIZE;
+    void* heap_end_ptr = reinterpret_cast<void*>(identity_mapped_end);
+    if (reinterpret_cast<uint64_t>(heap_start) < identity_mapped_end)
+        heap_init(heap_start, heap_end_ptr);
+
+    kernel_basic_info.page_orchestrator = new PageOrchestrator(
         bitmap_start,
         kernel_basic_info.total_pages
     );
 
-    for (int i = 0; i < 25; ++i) {
-        for (int j = 0; j < 80; ++j) {
-            kernel_basic_info.frame_buffer[i][j] = 0;
-        }
-    }
 
     IDT::init();
     IDT::load();
+    timer_init(10);
+    scheduler.init();
     Keyboard::init();
     enable_interrupts();
     initialize_syscalls();
-    int cur_line = 0;
-    int cur_column = 0;
-    int white = 0xF0 << 8;
-    kernel_basic_info.frame_buffer[cur_line][cur_column] = white;
+
+    g_fs = new fs::FileSystem();
+    if (!g_fs->is_formatted()) {
+        uint64_t disk_size = g_fs->detect_disk_size();
+        if (disk_size == 0) {
+            disk_size = 1024 * 1024;
+        }
+        g_fs->format(disk_size);
+    }
+    g_fs->mount();
+    uint32_t t;
+    if (g_fs->read_file("buffer", g_framebuffer.raw_buffer(), 80 * 25 * 2, &t) != fs::Error::Ok) {
+        g_fs->create_file("buffer");
+        g_framebuffer.clear();
+    }
+
+    void* init_buf = kmalloc(MAX_INIT_SIZE);
+    if (init_buf && scheduler.process_count < Scheduler::MAX_PROCESSES) {
+        uint32_t init_size = 0;
+        fs::Error read_err = g_fs->read_file("init", init_buf, MAX_INIT_SIZE, &init_size);
+        if (read_err == fs::Error::Ok && init_size > 0) {
+            Process* proc = new Process();
+            if (proc->pml4 && proc->load_binary(init_buf, init_size, HEAP_START_VIRT)) {
+                kfree(init_buf);
+                disable_interrupts();  /* prevent timer IRQ from overwriting init context.rip */
+                scheduler.add_process(*proc);
+                Process* init_proc = scheduler.get_current();
+                process_restore_and_switch_to_ctx(&init_proc->context, init_proc->get_cr3());
+            } else {
+                kfree(init_buf);
+                delete proc;
+            }
+        } else if (init_buf) {
+            kfree(init_buf);
+        }
+    } else if (init_buf) {
+        kfree(init_buf);
+    }
+
     while (true) {
         char c = Keyboard::getchar();
-        if (c != 0) {
-            if (c == '\n' || c == '\r') {
-                kernel_basic_info.frame_buffer[cur_line][cur_column] = 0;
-                cur_line++;
-                cur_column = 0;
-            }
-            else if (c == '\b') {
-                kernel_basic_info.frame_buffer[cur_line][cur_column] = 0;
-                cur_column--;
-                if (cur_column == -1) {
-                    cur_line--;
-                    cur_column++;
-                    while (kernel_basic_info.frame_buffer[cur_line][cur_column] != 0) {
-                        cur_column++;
-                    }
-                }
-            }
-            else {
-                kernel_basic_info.frame_buffer[cur_line][cur_column++] = c | 0xF00;
-            }
-        }
-        kernel_basic_info.frame_buffer[cur_line][cur_column] = white;
+        g_framebuffer.putchar(c);
+        g_fs->write_file("buffer", g_framebuffer.raw_buffer(), 80 * 25 * 2);
     }
 
     halt();

@@ -1,0 +1,32 @@
+# Build outputs
+build/
+*.o
+*.elf
+*.bin
+kernel.elf
+os.iso
+iso/boot/kernel.elf
+
+# Disk image (generated)
+disk.img
+
+# IDE / editor
+.cursor/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python (disk_util.py)
+__pycache__/
+*.py[cod]
+.Python
+*.pyc
+
+# Debug / logs
+*.log
+
+# OS / backup
+.DS_Store
+Thumbs.db
+*.bak
