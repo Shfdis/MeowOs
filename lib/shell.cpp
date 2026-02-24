@@ -1,6 +1,6 @@
 #include "syscall.h"
 
-static const char prompt[] = "> ";
+static const char prompt[] = "meow here: ";
 
 static void putstr(const char* s) {
     const char* p = s;

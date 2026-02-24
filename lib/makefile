@@ -7,7 +7,6 @@ BUILD := ../build
 
 all: $(BUILD)/shell.bin
 
-# Allow calling with explicit target name
 shell.bin: $(BUILD)/shell.bin
 
 $(BUILD)/start.o: start.asm | $(BUILD)
