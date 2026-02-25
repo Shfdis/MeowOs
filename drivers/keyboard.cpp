@@ -74,6 +74,7 @@ void Keyboard::handle_interrupt(cpu_context_t* ctx) {
         if (next_head != tail) {
             buffer[head] = c;
             head = next_head;
+            wake_keyboard_waiters();
         }
     }
 }
@@ -85,6 +86,14 @@ bool Keyboard::has_char() {
 char Keyboard::peek() {
     if (head == tail) return 0;
     return buffer[tail];
+}
+
+int Keyboard::debug_head() {
+    return head;
+}
+
+int Keyboard::debug_tail() {
+    return tail;
 }
 
 char Keyboard::getchar() {

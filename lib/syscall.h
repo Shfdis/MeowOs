@@ -1,5 +1,5 @@
 #pragma once
-#include "types.h"
+#include <cstdint>
 
 #define SYS_ALIVE 0
 #define SYS_FEED  1
@@ -7,6 +7,7 @@
 #define SYS_PLAY  3
 #define SYS_PET   4
 #define SYS_MEOW  5
+#define SYS_DROP  6
 
 static inline uint64_t syscall0(uint64_t num) {
     uint64_t ret;
@@ -58,3 +59,8 @@ static inline int64_t sys_meow(const char* filename, const void* buf, uint32_t s
         reinterpret_cast<uint64_t>(buf),
         static_cast<uint64_t>(size)));
 }
+
+static inline void sys_drop(int status) {
+    (void)syscall1(SYS_DROP, static_cast<uint64_t>(status));
+}
+

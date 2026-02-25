@@ -6,31 +6,24 @@ namespace {
 constexpr uint64_t PAGE_SIZE = 4096;
 constexpr uint64_t IDENTITY_MAPPED_END = 32ULL * 1024 * 1024;
 
-/** Kernel-only: Present, Read/Write, Supervisor (no User bit) */
 constexpr uint64_t PTE_KERNEL = 0x03;
-/** User-accessible: Present, Read/Write, User */
 constexpr uint64_t PTE_USER = 0x07;
 
-/** Stack: 4 pages (16 KB). One guard page below (unmapped). */
 constexpr uint64_t STACK_PAGES = 4;
 constexpr uint64_t STACK_SIZE = STACK_PAGES * PAGE_SIZE;
-/** User space stack: just below 32 MiB. Guard at 0x1FE0000, stack at 0x1FF0000..0x2000000 */
-constexpr uint64_t GUARD_PAGE_VIRT = 0x1FE0000;
-constexpr uint64_t STACK_BASE_VIRT = 0x1FF0000;
 constexpr uint64_t STACK_TOP_VIRT = 0x2000000;
-/** Heap starts at 32 MiB (right after identity-mapped kernel space), grows upward. */
+constexpr uint64_t STACK_BASE_VIRT = STACK_TOP_VIRT - STACK_SIZE;
+constexpr uint64_t GUARD_PAGE_VIRT = STACK_BASE_VIRT - PAGE_SIZE;
 constexpr uint64_t HEAP_START_VIRT = 0x2000000;
 
 PageOrchestrator& get_orchestrator() {
     return *kernel_basic_info.page_orchestrator;
 }
 
-/** Returns physical address; identity-mapped kernel so virt == phys for our range. */
 inline uint64_t virt_to_phys(const void* ptr) {
     return reinterpret_cast<uint64_t>(ptr);
 }
 
-/** Get or allocate next-level table. *entry is the PML4/PDPT/PD entry; if 0, allocates a page and sets it. */
 uint64_t* get_or_alloc_table(uint64_t* entry, uint64_t flags) {
     if ((*entry) & 1) {
         return reinterpret_cast<uint64_t*>(*entry & ~0xFFFULL);
@@ -47,7 +40,6 @@ uint64_t* get_or_alloc_table(uint64_t* entry, uint64_t flags) {
     return table;
 }
 
-/** Map one 4KB page in the given PML4. Assumes identity mapping for table addresses. */
 bool map_page(uint64_t* pml4, uint64_t vaddr, uint64_t paddr, uint64_t flags) {
     uint64_t pml4_i = (vaddr >> 39) & 0x1FF;
     uint64_t pdpt_i = (vaddr >> 30) & 0x1FF;
@@ -76,7 +68,6 @@ void unmap_page(uint64_t* pml4, uint64_t vaddr) {
     pt[pt_i] = 0;
 }
 
-/** Release all page tables under a PML4 entry (recursive). */
 void release_tables(uint64_t* table, unsigned level) {
     if (level == 0) return;
     for (uint64_t i = 0; i < 512; ++i) {
@@ -87,7 +78,6 @@ void release_tables(uint64_t* table, unsigned level) {
     }
 }
 
-/** Release entire PML4 hierarchy (except the PML4 page itself; caller frees that). */
 void release_pml4_hierarchy(uint64_t* pml4) {
     for (uint64_t i = 0; i < 512; ++i) {
         if (!(pml4[i] & 1)) continue;
@@ -97,7 +87,7 @@ void release_pml4_hierarchy(uint64_t* pml4) {
     }
 }
 
-} // namespace
+}
 
 uint64_t Process::next_pid = 1;
 
@@ -109,7 +99,7 @@ void MemoryMapping::add_region(uint64_t base, uint64_t size, uint8_t permissions
     ++count;
 }
 
-Process::Process() : pml4(nullptr), mapped_pages(0), heap_start(HEAP_START_VIRT), heap_end(HEAP_START_VIRT), stack_top(0), stack_size(0), pid(0) {
+Process::Process() : state(ProcessState::Runnable), wait_queue_next(nullptr), pml4(nullptr), mapped_pages(0), heap_start(HEAP_START_VIRT), heap_end(HEAP_START_VIRT), stack_top(0), stack_size(0), pid(0) {
     context = {};
     void* pml4_page = get_orchestrator().get_page();
     if (!pml4_page) return;

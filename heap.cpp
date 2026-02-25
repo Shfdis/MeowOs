@@ -61,7 +61,7 @@ BlockHeader* get_prev_block(BlockHeader* block) {
     return nullptr;
 }
 
-} // namespace
+}
 
 void heap_init(void* start, void* end) {
     heap_start = reinterpret_cast<char*>(start);

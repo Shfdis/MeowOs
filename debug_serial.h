@@ -33,4 +33,11 @@ inline void put_hex(uint64_t x) {
     for (; x && i < 16; i++) { buf[i] = hex[x & 15]; x >>= 4; }
     while (i--) putc(buf[i]);
 }
+
+inline void put_dec(unsigned x) {
+    char buf[4];
+    unsigned i = 0;
+    do { buf[i++] = static_cast<char>('0' + (x % 10)); x /= 10; } while (x && i < 4);
+    while (i--) putc(buf[i]);
+}
 }

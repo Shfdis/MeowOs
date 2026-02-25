@@ -1,6 +1,8 @@
 #pragma once
 #include "types/cpu.h"
 
+void wake_keyboard_waiters();
+
 class Keyboard {
 private:
     static bool shift_pressed;
@@ -18,4 +20,6 @@ public:
     static char getchar();
     static bool has_char();
     static char peek();
+    static int debug_head();
+    static int debug_tail();
 };

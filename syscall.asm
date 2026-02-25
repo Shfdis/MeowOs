@@ -23,8 +23,6 @@ syscall_entry:
     mov byte [rel in_syscall], 1
     call syscall_handler
     mov byte [rel in_syscall], 0
-
-    ; Same-privilege return path: restore flags and jump to saved post-syscall RIP.
     pop r11
     pop rcx
 

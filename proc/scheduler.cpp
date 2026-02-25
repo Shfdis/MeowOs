@@ -40,6 +40,16 @@ void Scheduler::remove_process(Process& proc) {
     }
 }
 
+int Scheduler::find_next_runnable_index() {
+    if (process_count == 0) return -1;
+    for (size_t i = 0; i < process_count; ++i) {
+        size_t idx = (current_index + 1 + i) % process_count;
+        if (processes[idx]->state == ProcessState::Runnable)
+            return static_cast<int>(idx);
+    }
+    return -1;
+}
+
 Process* Scheduler::tick() {
     ++tick_count;
     if (quantum > 0)
@@ -49,14 +59,22 @@ Process* Scheduler::tick() {
         return current_process;
 
     quantum = DEFAULT_QUANTUM;
-    if (!current_process || process_count <= 1)
-        return current_process;
 
-    size_t next_index = (current_index + 1) % process_count;
-    Process* next = processes[next_index];
-    current_index = next_index;
-    current_process = next;
-    return next;
+    int next_idx = find_next_runnable_index();
+    if (next_idx < 0)
+        return nullptr;
+
+    current_index = static_cast<size_t>(next_idx);
+    current_process = processes[current_index];
+    return current_process;
+}
+
+Process* Scheduler::pick_next_runnable() {
+    int next_idx = find_next_runnable_index();
+    if (next_idx < 0)
+        return nullptr;
+    current_index = static_cast<size_t>(next_idx);
+    return processes[current_index];
 }
 
 Process* Scheduler::get_current() {

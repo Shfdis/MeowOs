@@ -11,8 +11,7 @@ extern "C" bool in_syscall;
 extern "C" void interrupt_handler(cpu_context_t* ctx) {
     if (ctx->int_no == 32) {
         Process* saved_current = current_process;
-        /* Do not save process context when we're in the kernel during a syscall. */
-        if (saved_current && !in_syscall) {
+        if (saved_current && !in_syscall && ctx->rip >= saved_current->heap_start) {
             uint64_t* s = reinterpret_cast<uint64_t*>(&saved_current->context);
             uint64_t* f = reinterpret_cast<uint64_t*>(ctx);
             for (size_t i = 0; i < 22; ++i)

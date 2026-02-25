@@ -4,6 +4,7 @@
 #include "types/idt.h"
 #include "drivers/keyboard.h"
 #include "drivers/framebuffer.h"
+#include "debug_serial.h"
 #include "timer.h"
 #include "scheduler.h"
 #include "fs/filesystem.h"
@@ -93,6 +94,7 @@ void kernel_init(int magic, multiboot_info_t* multiboot_info) {
     );
 
 
+    debug_serial::init();
     IDT::init();
     IDT::load();
     timer_init(10);
@@ -124,7 +126,7 @@ void kernel_init(int magic, multiboot_info_t* multiboot_info) {
             Process* proc = new Process();
             if (proc->pml4 && proc->load_binary(init_buf, init_size, HEAP_START_VIRT)) {
                 kfree(init_buf);
-                disable_interrupts();  /* prevent timer IRQ from overwriting init context.rip */
+                disable_interrupts();
                 scheduler.add_process(*proc);
                 Process* init_proc = scheduler.get_current();
                 process_restore_and_switch_to_ctx(&init_proc->context, init_proc->get_cr3());

@@ -1,6 +1,6 @@
 CXXFLAGS := -m64 -ffreestanding -nostdlib -fno-exceptions -fno-rtti -fno-stack-protector -I. -I./proc -I./drivers -O0
 
-.PHONY: build iso emu disk build/shell.bin
+.PHONY: build iso emu disk build/shell.bin build/hello_world.bin
 
 build:
 	mkdir -p build
@@ -8,14 +8,31 @@ build:
 build/shell.bin:
 	$(MAKE) -C lib shell.bin
 
+build/hello_world.bin:
+	$(MAKE) -C lib hello_world.bin
+
 build/syscall.o: syscall.asm | build
 	nasm -f elf64 -o build/syscall.o syscall.asm
 
 build/start_kernel.o: start_kernel.asm | build
 	nasm -f elf64 -o build/start_kernel.o start_kernel.asm
 
-build/syscall_handler.o: syscall_handler.h syscall_handler.cpp | build
-	g++ $(CXXFLAGS) -c -o build/syscall_handler.o syscall_handler.cpp
+build/syscall_dispatch.o: syscall/syscall.cpp syscall/syscall.h syscall/impl.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_dispatch.o syscall/syscall.cpp
+build/syscall_alive.o: syscall/alive.cpp syscall/impl.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_alive.o syscall/alive.cpp
+build/syscall_feed.o: syscall/feed.cpp syscall/impl.h syscall/syscall.h proc/process.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_feed.o syscall/feed.cpp
+build/syscall_time.o: syscall/time.cpp syscall/impl.h proc/scheduler.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_time.o syscall/time.cpp
+build/syscall_play.o: syscall/play.cpp syscall/impl.h syscall/syscall.h proc/process.h proc/scheduler.h fs/filesystem.h fs/fs_error.h heap.h fs/fs_structs.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_play.o syscall/play.cpp
+build/syscall_pet.o: syscall/pet.cpp syscall/impl.h syscall/syscall.h drivers/keyboard.h fs/filesystem.h fs/fs_error.h fs/fs_structs.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_pet.o syscall/pet.cpp
+build/syscall_meow.o: syscall/meow.cpp syscall/impl.h drivers/framebuffer.h fs/filesystem.h fs/fs_error.h fs/fs_structs.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_meow.o syscall/meow.cpp
+build/syscall_drop.o: syscall/drop.cpp syscall/impl.h syscall/syscall.h proc/process.h proc/scheduler.h types/cpu.h | build
+	g++ $(CXXFLAGS) -c -o build/syscall_drop.o syscall/drop.cpp
 
 build/kernel_init.o: kernel_init.cpp kernel_init.h proc/process.h | build
 	g++ $(CXXFLAGS) -c -o build/kernel_init.o kernel_init.cpp
@@ -62,7 +79,7 @@ build/timer.o: proc/timer.cpp proc/timer.h | build
 build/scheduler.o: proc/scheduler.cpp proc/scheduler.h proc/process.h syscall_handler.h | build
 	g++ $(CXXFLAGS) -c -o build/scheduler.o proc/scheduler.cpp
 
-kernel.elf: build/start_kernel.o build/interrupts.o build/kernel_init.o build/page_orchestrator.o build/heap.o build/keyboard.o build/framebuffer.o build/interrupt_handler.o build/idt.o build/syscall_handler.o build/syscall.o build/disk_io.o build/block_allocator.o build/filesystem.o build/process.o build/process_switch.o build/timer.o build/scheduler.o
+kernel.elf: build/start_kernel.o build/interrupts.o build/kernel_init.o build/page_orchestrator.o build/heap.o build/keyboard.o build/framebuffer.o build/interrupt_handler.o build/idt.o build/syscall.o build/syscall_dispatch.o build/syscall_alive.o build/syscall_feed.o build/syscall_time.o build/syscall_play.o build/syscall_pet.o build/syscall_meow.o build/syscall_drop.o build/disk_io.o build/block_allocator.o build/filesystem.o build/process.o build/process_switch.o build/timer.o build/scheduler.o
 	ld -T allignment.ld -melf_x86_64 \
 	   build/start_kernel.o \
 	   build/interrupts.o \
@@ -74,7 +91,14 @@ kernel.elf: build/start_kernel.o build/interrupts.o build/kernel_init.o build/pa
 	   build/interrupt_handler.o \
 	   build/idt.o \
 	   build/syscall.o \
-	   build/syscall_handler.o \
+	   build/syscall_dispatch.o \
+	   build/syscall_alive.o \
+	   build/syscall_feed.o \
+	   build/syscall_time.o \
+	   build/syscall_play.o \
+	   build/syscall_pet.o \
+	   build/syscall_meow.o \
+	   build/syscall_drop.o \
 	   build/disk_io.o \
 	   build/block_allocator.o \
 	   build/filesystem.o \
@@ -91,10 +115,11 @@ iso: kernel.elf
 	cp grub.cfg iso/boot/grub/grub.cfg
 	grub-mkrescue -o os.iso iso
 
-disk: build/shell.bin
+disk: build/shell.bin build/hello_world.bin
 	if [ ! -f disk.img ]; then dd if=/dev/zero of=disk.img bs=1M count=64; fi
 	python disk_util.py format disk.img 1048576
 	python disk_util.py add disk.img build/shell.bin init
+	python disk_util.py add disk.img build/hello_world.bin hello_world
 
 emu: iso disk
-	qemu-system-x86_64 -boot d -cdrom os.iso -drive file=disk.img,format=raw,if=ide -m 512
+	qemu-system-x86_64 -boot d -cdrom os.iso -drive file=disk.img,format=raw,if=ide -m 512 -serial file:.cursor/debug-ccf50d.log
