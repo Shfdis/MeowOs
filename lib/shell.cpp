@@ -1,13 +1,8 @@
 #include "syscall.h"
 #include "out.h"
+
 static int strcmp(const char* a, const char* b) {
     while (*a && *a == *b) { ++a; ++b; }
-    return static_cast<unsigned char>(*a) - static_cast<unsigned char>(*b);
-}
-
-static int strncmp(const char* a, const char* b, unsigned n) {
-    while (n && *a && *b && *a == *b) { --n; ++a; ++b; }
-    if (n == 0) return 0;
     return static_cast<unsigned char>(*a) - static_cast<unsigned char>(*b);
 }
 
@@ -40,24 +35,19 @@ static int readline(char* buf, uint32_t max_size) {
 }
 
 void process_command(const char* line) {
-    if (strcmp(line, "help") == 0) {
-        putstr("fuck me 2 times baby\n");
-    } else if (strcmp(line, "exit") == 0 || strcmp(line, "quit") == 0) {
+    if (strcmp(line, "exit") == 0 || strcmp(line, "quit") == 0) {
         sys_drop(0);
-    } else if (strncmp(line, "exec ", 5) == 0) {
-        const char* filename = line + 5;
-        if (filename[0] == '\0') {
-            putstr("exec: usage exec <file>\n");
-            return;
-        }
-        int64_t ret = sys_play(filename, 1);
-        if (ret < 0) {
-            putstr("exec failed\n");
-        }
     }
+    int64_t pid = sys_play(line, 1);
+    if (pid >= 0)
+        sys_wait(pid);
+    else
+        putstr("failed\n");
 }
 
-int main() {
+int main(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
     char line[256];
     for (;;) {
         putstr(prompt);

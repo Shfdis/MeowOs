@@ -14,6 +14,7 @@ public:
     Process* tick();
     Process* pick_next_runnable();
     Process* get_current();
+    Process* find_process_by_pid(uint64_t pid);
     uint64_t get_ticks() const;
 
     Process* processes[MAX_PROCESSES];

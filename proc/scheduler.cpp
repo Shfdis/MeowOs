@@ -81,6 +81,14 @@ Process* Scheduler::get_current() {
     return current_process;
 }
 
+Process* Scheduler::find_process_by_pid(uint64_t pid) {
+    for (size_t i = 0; i < process_count; ++i) {
+        if (processes[i] && processes[i]->pid == pid)
+            return processes[i];
+    }
+    return nullptr;
+}
+
 uint64_t Scheduler::get_ticks() const {
     return tick_count;
 }

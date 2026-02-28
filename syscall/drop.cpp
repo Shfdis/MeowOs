@@ -10,6 +10,8 @@ uint64_t syscall_drop() {
     if (!current_process)
         return static_cast<uint64_t>(-1);
     Process* exiting = current_process;
+    for (Process* w = exiting->exit_wait_head; w; w = w->exit_wait_next)
+        w->state = ProcessState::Runnable;
     scheduler.remove_process(*exiting);
     delete exiting;
     if (current_process != nullptr && current_process->state == ProcessState::Blocked) {

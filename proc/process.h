@@ -37,9 +37,13 @@ public:
     int64_t sbrk_pages(int64_t n_pages);
     bool load_binary(const void* data, uint32_t size, uint64_t entry_point);
 
+    bool write_at(uint64_t vaddr, const void* data, size_t len);
+
     cpu_context_t context;
     ProcessState state;
     Process* wait_queue_next;
+    Process* exit_wait_head;
+    Process* exit_wait_next;
     uint64_t* pml4;
     uint64_t mapped_pages;
     uint64_t heap_start;

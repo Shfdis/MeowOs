@@ -87,6 +87,22 @@ void release_pml4_hierarchy(uint64_t* pml4) {
     }
 }
 
+uint64_t resolve_vaddr_to_phys(uint64_t* pml4, uint64_t vaddr) {
+    if (!pml4 || !(pml4[(vaddr >> 39) & 0x1FF] & 1))
+        return 0;
+    uint64_t* pdpt = reinterpret_cast<uint64_t*>(pml4[(vaddr >> 39) & 0x1FF] & ~0xFFFULL);
+    if (!(pdpt[(vaddr >> 30) & 0x1FF] & 1))
+        return 0;
+    uint64_t* pd = reinterpret_cast<uint64_t*>(pdpt[(vaddr >> 30) & 0x1FF] & ~0xFFFULL);
+    if (!(pd[(vaddr >> 21) & 0x1FF] & 1))
+        return 0;
+    uint64_t* pt = reinterpret_cast<uint64_t*>(pd[(vaddr >> 21) & 0x1FF] & ~0xFFFULL);
+    if (!(pt[(vaddr >> 12) & 0x1FF] & 1))
+        return 0;
+    uint64_t frame = pt[(vaddr >> 12) & 0x1FF] & ~0xFFFULL;
+    return frame + (vaddr & 0xFFF);
+}
+
 }
 
 uint64_t Process::next_pid = 1;
@@ -99,7 +115,7 @@ void MemoryMapping::add_region(uint64_t base, uint64_t size, uint8_t permissions
     ++count;
 }
 
-Process::Process() : state(ProcessState::Runnable), wait_queue_next(nullptr), pml4(nullptr), mapped_pages(0), heap_start(HEAP_START_VIRT), heap_end(HEAP_START_VIRT), stack_top(0), stack_size(0), pid(0) {
+Process::Process() : state(ProcessState::Runnable), wait_queue_next(nullptr), exit_wait_head(nullptr), exit_wait_next(nullptr), pml4(nullptr), mapped_pages(0), heap_start(HEAP_START_VIRT), heap_end(HEAP_START_VIRT), stack_top(0), stack_size(0), pid(0) {
     context = {};
     void* pml4_page = get_orchestrator().get_page();
     if (!pml4_page) return;
@@ -246,5 +262,27 @@ bool Process::load_binary(const void* data, uint32_t size, uint64_t entry_point)
     memory_mapping.add_region(heap_start, n_pages * PAGE_SIZE, static_cast<uint8_t>(PTE_USER));
     context.rip = entry_point;
     context.rsp = stack_top;
+    return true;
+}
+
+bool Process::write_at(uint64_t vaddr, const void* data, size_t len) {
+    if (!pml4 || !data)
+        return false;
+    const char* src = static_cast<const char*>(data);
+    while (len > 0) {
+        uint64_t phys = resolve_vaddr_to_phys(pml4, vaddr);
+        if (!phys)
+            return false;
+        uint64_t page_off = vaddr & 0xFFF;
+        size_t chunk = static_cast<size_t>(PAGE_SIZE - page_off);
+        if (chunk > len)
+            chunk = len;
+        char* dst = reinterpret_cast<char*>(phys);
+        for (size_t i = 0; i < chunk; ++i)
+            dst[i] = src[i];
+        vaddr += chunk;
+        src += chunk;
+        len -= chunk;
+    }
     return true;
 }

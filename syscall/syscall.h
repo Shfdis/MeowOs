@@ -10,7 +10,9 @@ enum class SyscallCodes : uint64_t {
     PLAY = 3,
     PET = 4,
     MEOW = 5,
-    DROP = 6
+    DROP = 6,
+    LIST = 7,
+    WAIT = 8
 };
 
 void initialize_syscalls();

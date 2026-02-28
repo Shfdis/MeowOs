@@ -8,6 +8,8 @@
 #define SYS_PET   4
 #define SYS_MEOW  5
 #define SYS_DROP  6
+#define SYS_LIST  7
+#define SYS_WAIT  8
 
 static inline uint64_t syscall0(uint64_t num) {
     uint64_t ret;
@@ -18,6 +20,12 @@ static inline uint64_t syscall0(uint64_t num) {
 static inline uint64_t syscall1(uint64_t num, uint64_t a0) {
     uint64_t ret;
     asm volatile("syscall" : "=a"(ret) : "a"(num), "D"(a0) : "rcx", "r11", "memory");
+    return ret;
+}
+
+static inline uint64_t syscall2(uint64_t num, uint64_t a0, uint64_t a1) {
+    uint64_t ret;
+    asm volatile("syscall" : "=a"(ret) : "a"(num), "D"(a0), "S"(a1) : "rcx", "r11", "memory");
     return ret;
 }
 
@@ -62,5 +70,17 @@ static inline int64_t sys_meow(const char* filename, const void* buf, uint32_t s
 
 static inline void sys_drop(int status) {
     (void)syscall1(SYS_DROP, static_cast<uint64_t>(status));
+}
+
+#define SYS_LIST_NAME_LEN 64
+
+static inline int64_t sys_list(char* buffer, int max_files) {
+    return static_cast<int64_t>(syscall2(SYS_LIST,
+        reinterpret_cast<uint64_t>(buffer),
+        static_cast<uint64_t>(max_files)));
+}
+
+static inline int64_t sys_wait(uint64_t pid) {
+    return static_cast<int64_t>(syscall1(SYS_WAIT, pid));
 }
 

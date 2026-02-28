@@ -78,8 +78,10 @@ uint64_t syscall_handler(uint64_t num, uint64_t a0, uint64_t a1,
             return syscall_meow(a0, a1, a2);
         case static_cast<uint64_t>(SyscallCodes::DROP):
             return syscall_drop();
-        case 7:
-            return 0;
+        case static_cast<uint64_t>(SyscallCodes::LIST):
+            return syscall_list(a0, a1);
+        case static_cast<uint64_t>(SyscallCodes::WAIT):
+            return syscall_wait(a0);
     }
     return static_cast<uint64_t>(-1);
 }

@@ -4,7 +4,6 @@
 #include "types/idt.h"
 #include "drivers/keyboard.h"
 #include "drivers/framebuffer.h"
-#include "debug_serial.h"
 #include "timer.h"
 #include "scheduler.h"
 #include "fs/filesystem.h"
@@ -94,7 +93,6 @@ void kernel_init(int magic, multiboot_info_t* multiboot_info) {
     );
 
 
-    debug_serial::init();
     IDT::init();
     IDT::load();
     timer_init(10);
